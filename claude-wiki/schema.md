@@ -9,6 +9,39 @@ The vault uses a PKM-style layout with eight top-level categories.
 - **Runtime state**: `~/.claude/wiki/state/` — user-specific, never
   committed to either this plugin or the vault.
 
+## Three-layer mapping (Karpathy's schema)
+
+| Layer | What | Where |
+|---|---|---|
+| **1. Raw sources** (immutable, human-curated, LLM read-only) | Claude Code session transcripts | `~/.claude/projects/**/*.jsonl` |
+| **1.5 Staging** (mutable intake, LLM may move) | Manually-dropped notes | `<vault>/01_inbox/*.md` |
+| **2. Wiki** (LLM writes, humans browse) | All 00/02-07 category pages + `index.md` + `log.md` + `_schema.md` | `<vault>/**` |
+| **3. Schema** (human + LLM co-evolved) | Ingestion rules, category definitions, skill behavior | `${CLAUDE_PLUGIN_ROOT}/schema.md` (canonical) + each `SKILL.md` |
+
+`01_inbox/` is explicitly "Layer 1.5" — it accepts raw input like Layer 1
+but is mutated by ingest like staging. Contents are either moved out
+(classified) or left with a `> [!question] Needs sorting` callout.
+
+## Wiki meta files (auto-maintained at vault root)
+
+| File | Role | Maintained by |
+|---|---|---|
+| `<vault>/index.md` | Catalog of every page grouped by category. Regenerated from filesystem at the end of every `/wiki-ingest` run. **Do not hand-edit.** | `/wiki-ingest` |
+| `<vault>/log.md` | Append-only chronological record of every `/wiki-*` operation (ingest/query/lint/status). One line per invocation. | every `/wiki-*` skill |
+| `<vault>/_schema.md` | Read-only mirror of this file. Exists so the schema is visible when browsing the vault in Obsidian without access to the plugin repo. Overwritten on every ingest. **Do not hand-edit.** | `/wiki-ingest` |
+
+Log line format:
+```
+- YYYY-MM-DDTHH:MM:SSZ  op:<ingest|query|lint|status>  <one-line summary>
+```
+
+Examples:
+```
+- 2026-04-23T02:30:00Z  op:ingest  S=3 I=1 pages=8 unsortable=0
+- 2026-04-23T09:15:00Z  op:query   "when did we fix the auth bug?" → 03_work/meguru-pm-report
+- 2026-04-23T10:00:00Z  op:lint    contradictions=2 orphans=5 stale=3
+```
+
 ## Categories
 
 | #  | Folder         | Purpose |
@@ -95,14 +128,23 @@ updated: YYYY-MM-DD
 7. **Contradictions**: `> [!warning] Contradiction` callout rather than
    silent overwrite.
 8. **Cross-link**: every new page must contain ≥ 1 `[[wiki-link]]`.
-9. **Audit trail**: append to `~/.claude/wiki/state/ingest-log.jsonl`
+9. **Audit trail (machine)**: append to `~/.claude/wiki/state/ingest-log.jsonl`
    one line per input processed.
-10. **Commit, never push.** `git commit` in the vault after a batch; the
+10. **Wiki meta refresh** (at the end of every `/wiki-ingest`):
+    - Regenerate `<vault>/index.md` from the filesystem (alphabetical
+      within each category, skip dotfiles and root welcome notes).
+    - Append one-line entry to `<vault>/log.md`.
+    - Copy `${CLAUDE_PLUGIN_ROOT}/schema.md` to `<vault>/_schema.md`
+      (only if different) with a prepended note:
+      `> Read-only mirror. Canonical copy is ${CLAUDE_PLUGIN_ROOT}/schema.md. Overwritten on next /wiki-ingest.`
+11. **Commit, never push.** `git commit` in the vault after a batch; the
     user decides when to `git push`.
 
 ## Non-goals
 
-- Writing `index.md` at vault root — Obsidian's graph view supplants it.
 - Touching `ようこそ.md` or `make folders composition.md` — those are the
   user's welcome notes; leave alone.
 - Pushing to GitHub from ingest — the user controls when to `git push`.
+- Hand-editing `index.md`, `log.md`, or `_schema.md` — they are
+  auto-maintained. For `log.md`, append-only via skill code; never rewrite
+  history.

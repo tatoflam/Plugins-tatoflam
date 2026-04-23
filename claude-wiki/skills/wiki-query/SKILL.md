@@ -34,10 +34,18 @@ say so and suggest `/wiki-ingest` (new sessions may not be ingested yet).
    page has an old `updated:`, say so at the end:
    `Queue has N unprocessed sessions + K inbox items — run /wiki-ingest for latest.`
 5. **Never fabricate.** If the vault is silent, say so plainly.
+6. **Log the query.** After answering, append one line to
+   `<vault>/log.md`:
+   ```
+   - <ISO>  op:query  "<question-trimmed-to-80-chars>" → <top-page-cited or "no-match">
+   ```
+   This is the only write `/wiki-query` is permitted to make.
 
 ## Guardrails
 
-- **Read-only.** Never edit any file under the vault.
+- **Effectively read-only.** The only permitted write is appending one
+  line to `<vault>/log.md` per invocation (step 6). Never edit any
+  category page.
 - **No raw-transcript fallback.** Do not open `~/.claude/projects/**/*.jsonl`
   unless the user explicitly asks.
 - **No web fallback.** Don't web search unless the user explicitly asks.

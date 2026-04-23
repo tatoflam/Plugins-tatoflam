@@ -61,10 +61,17 @@ resolving contradictions — that's this skill's job.
 
 End with one-line summary + one recommended action.
 
+After the report is printed, append one line to `<vault>/log.md`:
+```
+- <ISO>  op:lint  contradictions=<N> orphans=<N> stale=<N> broken=<N> stuck-inbox=<N>
+```
+This is the only write `/wiki-lint` makes in read-only mode.
+
 ## Guardrails
 
-- **Read-only** unless the user explicitly says "fix" after seeing the
-  report. Do not proactively resolve anything.
+- **Effectively read-only** unless the user explicitly says "fix" after
+  seeing the report. The only permitted write in read-only mode is the
+  one-line append to `<vault>/log.md`.
 - **Never auto-resolve contradictions.** Human judgment required.
 - **Never edit vault welcome files** (`ようこそ.md`,
   `make folders composition.md`).

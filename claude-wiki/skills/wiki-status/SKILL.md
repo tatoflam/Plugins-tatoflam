@@ -26,6 +26,7 @@ One-shot status readout. No edits.
    uncommitted changes). If not a git repo, say so.
 6. **Hook errors** — tail of `~/.claude/wiki/state/hook-errors.log` if
    present.
+7. **Recent ops** — last 5 lines of `<vault>/log.md`.
 
 ## Output format
 
@@ -44,6 +45,7 @@ Pages:
   07 Archive     <N>
 Vault git:     <clean | N uncommitted | not a git repo>
 Hook errors:   <none | last 3 lines>
+Recent ops:    <last 5 lines of log.md>
 ```
 
 ## Guardrails
