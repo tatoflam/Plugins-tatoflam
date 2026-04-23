@@ -1,13 +1,15 @@
 {
-  "SessionEnd": [
-    {
-      "matcher": "",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "${CLAUDE_PLUGIN_ROOT}/scripts/enqueue-session.sh"
-        }
-      ]
-    }
-  ]
+  "hooks": {
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/enqueue-session.sh"
+          }
+        ]
+      }
+    ]
+  }
 }
