@@ -1,0 +1,17 @@
+{
+  "name": "claude-wiki",
+  "version": "0.1.0",
+  "description": "Karpathy-style LLM wiki: SessionEnd hook + skills to ingest Claude Code conversations into an Obsidian vault with 00-07 categories.",
+  "author": { "name": "tatoflam" },
+  "repository": "https://github.com/tatoflam/Plugins-tatoflam",
+  "license": "MIT",
+  "keywords": [
+    "wiki",
+    "knowledge-management",
+    "obsidian",
+    "pkm",
+    "karpathy",
+    "session-ingest",
+    "hooks"
+  ]
+}

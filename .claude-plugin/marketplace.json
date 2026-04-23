@@ -1,0 +1,30 @@
+{
+  "name": "plugins-tatoflam",
+  "description": "Personal Claude Code plugins by @tatoflam",
+  "version": "0.1.0",
+  "pluginRoot": ".",
+  "owner": {
+    "name": "tatoflam",
+    "email": "tato.flam@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "claude-wiki",
+      "source": "./claude-wiki",
+      "description": "Karpathy-style LLM wiki. SessionEnd hook enqueues each Claude Code session; /wiki-ingest classifies queued sessions + manually-dropped inbox notes into an 8-category Obsidian vault (00_self / 01_inbox / 02_diary / 03_work / 04_life / 05_learn / 06_output / 07_archive). Ships /wiki-query, /wiki-lint, /wiki-status.",
+      "version": "0.1.0",
+      "author": { "name": "tatoflam" },
+      "repository": "https://github.com/tatoflam/Plugins-tatoflam",
+      "license": "MIT",
+      "keywords": [
+        "wiki",
+        "knowledge-management",
+        "obsidian",
+        "pkm",
+        "karpathy",
+        "session-ingest",
+        "hooks"
+      ]
+    }
+  ]
+}
