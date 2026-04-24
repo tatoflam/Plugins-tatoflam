@@ -55,6 +55,70 @@ Examples:
 | 06 | `06_output/`   | **Artifacts published externally** by the user, LLMs, or services they run. Store the artifact if small; otherwise a link catalog. |
 | 07 | `07_archive/`  | Deprecated or completed. |
 
+## Tag taxonomy
+
+All non-diary pages carry a `tags:` frontmatter array. Tags use a
+prefixed, colon-separated form (`<facet>:<slug>`) so they roll up
+cleanly in Obsidian's tag pane and survive as stable filter keys.
+
+### Primary tag (required)
+
+Every page carries at least one **primary tag** identifying its subject
+within the category:
+
+| Category   | Primary tag form     | Examples |
+|------------|----------------------|----------|
+| 00_self    | `aspect:<slug>`      | `aspect:profile`, `aspect:values`, `aspect:skills`, `aspect:goals` |
+| 03_work    | `project:<slug>`     | `project:meguru-pm-report`, `project:yahatayama-rokujizo` |
+| 04_life    | `domain:<slug>`      | `domain:house`, `domain:finance`, `domain:family`, `domain:health`, `domain:hobby` |
+| 05_learn   | `topic:<slug>`       | `topic:claude-code`, `topic:google-sheets`, `topic:real-estate-law` |
+| 06_output  | `channel:<slug>`     | `channel:github`, `channel:gmail`, `channel:drive`, `channel:blog` |
+| 07_archive | inherit origin tags + `status:archived` + `archived:<YYYY-MM-DD>` | |
+
+### Secondary tags (optional, repeatable)
+
+- `tech:<slug>` — language / framework / tool (`tech:python`,
+  `tech:obsidian`, `tech:sqlite`)
+- `stage:<slug>` — lifecycle (`stage:planning`, `stage:active`,
+  `stage:handoff`, `stage:done`)
+- `client:<slug>` — for 03_work pages (`client:meguru`)
+- `entity:<slug>` — named non-tech entity (`entity:sayama-property`,
+  `entity:riel-sekine`)
+- `status:<slug>` — `status:archived` (07), `status:blocked`, etc.
+- Free-form bare tags (`budgeting`, `onboarding`) are allowed when no
+  prefix fits, but a page must carry at least one prefixed tag.
+
+### Slug rules
+
+- lowercase, hyphen-separated
+- ASCII preferred; Japanese OK for entity names when there is no clean
+  romanization (`entity:八幡山六地蔵`)
+- singular form (`meeting`, not `meetings`)
+- **reuse > invent** — grep existing pages for similar slugs first;
+  `/wiki-lint` flags near-duplicate slugs for consolidation
+
+### Valid facet prefixes
+
+`aspect`, `project`, `domain`, `topic`, `channel`, `tech`, `stage`,
+`client`, `entity`, `status`, `archived`.
+
+Any other prefix is treated as a free-form tag (allowed but not
+recognized as primary).
+
+### Ingest behavior (tags)
+
+- **Create**: derive tags from classification signals. Always assign the
+  primary tag for the category.
+- **Update**: merge new tags into existing; never drop a tag unless the
+  content clearly no longer applies.
+- **Archive (`git mv` to `07_archive/`)**: preserve existing tags,
+  append `status:archived` and `archived:YYYY-MM-DD`.
+
+Existing pages predating this taxonomy are grandfathered; ingest
+normalizes them opportunistically on the next update that touches them.
+`/wiki-lint` reports pages still missing a primary tag so the user can
+prioritize cleanup.
+
 ## `01_inbox/` is bidirectional
 
 - **Out**: `/wiki-ingest` puts anything it cannot confidently classify here,

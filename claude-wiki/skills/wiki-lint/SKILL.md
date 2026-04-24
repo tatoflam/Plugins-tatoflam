@@ -38,6 +38,14 @@ resolving contradictions — that's this skill's job.
    matching `02_diary/<date>.md` — indicates a past ingest bug.
 9. **Git state.** Uncommitted changes in the vault — prior
    `/wiki-ingest` may have failed mid-batch.
+10. **Non-compliant tags.** Non-diary pages whose `tags:` frontmatter is
+    missing, empty, or lacks a **primary tag** per schema.md §"Tag
+    taxonomy" (the primary form depends on category:
+    `project:` for 03_work, `domain:` for 04_life, `topic:` for
+    05_learn, `channel:` for 06_output, `aspect:` for 00_self,
+    inherited + `status:archived` for 07_archive). Report the count;
+    list the paths only if `--verbose` was requested or the count is
+    ≤ 10.
 
 ## Output format
 
@@ -54,6 +62,7 @@ resolving contradictions — that's this skill's job.
 ## Broken links (<N>)
 ## Duplicate titles (<N>)
 ## Diary gaps (<N>)
+## Non-compliant tags (<N>)
 
 ## Git
 - <clean | N uncommitted files>
@@ -63,7 +72,7 @@ End with one-line summary + one recommended action.
 
 After the report is printed, append one line to `<vault>/log.md`:
 ```
-- <ISO>  op:lint  contradictions=<N> orphans=<N> stale=<N> broken=<N> stuck-inbox=<N>
+- <ISO>  op:lint  contradictions=<N> orphans=<N> stale=<N> broken=<N> stuck-inbox=<N> untagged=<N>
 ```
 This is the only write `/wiki-lint` makes in read-only mode.
 

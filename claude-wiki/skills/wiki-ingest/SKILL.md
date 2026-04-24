@@ -72,6 +72,28 @@ d. **Low confidence → inbox.** If no category scores clearly:
      callout at the top.
    - For an inbox file: leave it in place; prepend the callout.
 
+d2. **Dirty-target gate (defer if the user is editing).** Before any write:
+   - Enumerate the target files this item will touch:
+     `02_diary/<YYYY-MM-DD>.md` (always, per step e) plus any vault page
+     the classification (c/d) will create or modify. Use the *update >
+     create* match from step f to identify the existing page you would
+     touch — a read-only grep, no write yet.
+   - For each target path, run
+     `git -C <vault> status --porcelain -- <path>`. Non-empty output
+     means the working copy is dirty — the user may be live-editing the
+     file in Obsidian/VSCode. Writing would race with the editor's
+     in-memory buffer and get silently overwritten on the next save.
+   - If *any* content target is dirty, **defer the whole item**:
+     - Leave `processed: false` in the queue (retried on next run).
+     - Append one line to `~/.claude/wiki/state/hook-errors.log`:
+       `<ISO>  session=<id>  skip=dirty_working_copy  files=[<p1>, ...]`
+     - Do not emit a row in `ingest-log.jsonl` (no audit trail for
+       deferred work — it will be logged when it actually lands).
+     - Count the item under "Deferred" in the final report and skip to
+       the next queue item.
+   - Skill-owned meta files (`log.md`, `index.md`, `_schema.md`) are not
+     user-editable and are excluded from this check.
+
 e. **Always write the diary entry.** Regardless of classification, append
    to `02_diary/<YYYY-MM-DD>.md`. Create the file if missing. Never
    overwrite prior entries.
@@ -84,8 +106,25 @@ g. **Contradictions**: `> [!warning] Contradiction` callout with both
 
 h. **Cross-link.** Every edit leaves the page with ≥ 1 `[[wiki-link]]`.
 
-i. **Cite every edit.** Update frontmatter `sources:` (array of session
-   ids or inbox filenames) and set `updated:` to today's date.
+i. **Cite and tag every edit.** Update frontmatter on every page you
+   touch:
+   - `sources:` — append the session id or inbox filename if not
+     already present.
+   - `updated:` — set to today's date.
+   - `tags:` — apply the taxonomy in schema.md §"Tag taxonomy":
+     - **Create**: assign the primary tag for the category
+       (`project:<slug>` for 03_work, `domain:<slug>` for 04_life,
+       `topic:<slug>` for 05_learn, `channel:<slug>` for 06_output,
+       `aspect:<slug>` for 00_self) plus any obvious secondary tags
+       (`tech:`, `client:`, `entity:`, `stage:`).
+     - **Update**: merge new tags into the existing array without
+       dropping prior entries. If the page predates the taxonomy and
+       has only bare tags (e.g. `[meguruit, python]`), add the primary
+       prefixed tag alongside them — do not rewrite existing bare tags.
+     - **Archive** (moving to `07_archive/`): preserve existing tags,
+       append `status:archived` and `archived:<YYYY-MM-DD>`.
+   - Follow schema.md slug rules: lowercase, hyphen-separated, singular,
+     reuse before invent.
 
 j. **Mark source processed.**
    - Sessions: set `cursors[path]` to current byte length.
@@ -94,6 +133,12 @@ j. **Mark source processed.**
    - Inbox files merged into an existing page: delete after the merge
      commits successfully.
    - Inbox files that stayed: keep in place with the question callout.
+
+**Also run the dirty-target gate before the meta refresh in step 4.** If
+the current ingest has already written to at least one content page,
+proceed — but if *all* sessions deferred and no content pages changed,
+skip steps 4–6 and exit with a "nothing to commit (all deferred)"
+report.
 
 ### 3. Audit trail (machine)
 Append one JSONL line per input to `~/.claude/wiki/state/ingest-log.jsonl`:
@@ -160,12 +205,16 @@ report. **Do NOT push.**
 ### 7. Report
 ```
 Sessions processed: <S>    Inbox items processed: <I>
+Deferred (dirty working copy): <D>
 Pages touched: <M>
 Moved to category: <N>    Left in inbox (needs sorting): <K>
 
 Needs your attention:
 - 01_inbox/<file>  candidates: [03_work, 05_learn]
   (rationale: ...)
+
+Deferred this run (will retry when user commits/closes edits):
+- session <id>  files=[02_diary/<date>.md, 03_work/<page>.md]
 ```
 End with a single actionable next step.
 
@@ -173,6 +222,10 @@ End with a single actionable next step.
 
 - **Idempotent**: `cursors.json` + `ingest-log.jsonl` ensure re-runs are
   no-ops on already-processed content.
+- **Never write to a file with uncommitted modifications in the vault
+  working copy.** The user may be live-editing it; our append would race
+  with the editor buffer and get silently overwritten on save. Defer the
+  session (see Procedure §2.d2) and retry on the next run.
 - **Never write runtime state into the vault.** Queue, cursors, logs all
   live under `~/.claude/wiki/state/`.
 - **Never edit vault welcome files**: `ようこそ.md`,
