@@ -2,58 +2,141 @@
 
 Inspired by Karpathy's LLM-wiki pattern
 (https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
-The vault uses a PKM-style layout with eight top-level categories.
+The vault uses a PKM-style layout with eight top-level categories, split
+into a **capture layer** (machine-written, conflict-free) and a
+**knowledge layer** (curated, stable structure).
 
 - **Vault path (default)**: `~/repo/github/tatoflam/v` — Obsidian vault,
   intended to be pushed to GitHub by the user.
 - **Runtime state**: `~/.claude/wiki/state/` — user-specific, never
   committed to either this plugin or the vault.
 
-## Three-layer mapping (Karpathy's schema)
+## Two-layer architecture
 
-| Layer | What | Where |
-|---|---|---|
-| **1. Raw sources** (immutable, human-curated, LLM read-only) | Claude Code session transcripts | `~/.claude/projects/**/*.jsonl` |
-| **1.5 Staging** (mutable intake, LLM may move) | Manually-dropped notes | `<vault>/01_inbox/*.md` |
-| **2. Wiki** (LLM writes, humans browse) | All 00/02-07 category pages + `index.md` + `log.md` + `_schema.md` | `<vault>/**` |
-| **3. Schema** (human + LLM co-evolved) | Ingestion rules, category definitions, skill behavior | `${CLAUDE_PLUGIN_ROOT}/schema.md` (canonical) + each `SKILL.md` |
+| Layer | What | Written by | Where |
+|---|---|---|---|
+| **Capture layer** (append-only, machine-owned, conflict-free) | Per-session digests + daily diary + operation logs | `/wiki-ingest` (non-interactive, SessionEnd hook) | `<vault>/_staging/`, `<vault>/02_diary/`, `<vault>/log.md` |
+| **Knowledge layer** (curated, stable topic structure, human-browsable) | 00/03/04/05/06/07 category pages + `home.md` | `/wiki-distill` (attended) + the user | `<vault>/00_self/` `03_work/` `04_life/` `05_learn/` `06_output/` `07_archive/` |
 
-`01_inbox/` is explicitly "Layer 1.5" — it accepts raw input like Layer 1
-but is mutated by ingest like staging. Contents are either moved out
-(classified) or left with a `> [!question] Needs sorting` callout.
+**The division of labor is strict**: ingest captures reliably and never
+touches curated pages (so it can never conflict with the user's open
+editors, and transcripts are persisted before retention deletes them);
+distill integrates thoughtfully and is run attended (so quality issues
+are caught by a human). Raw sources remain the Claude Code transcripts
+at `~/.claude/projects/**/*.jsonl` (immutable, LLM read-only) and the
+manual drop zone `<vault>/01_inbox/` (bidirectional hopper).
+
+## `_staging/` — the capture layer
+
+`/wiki-ingest` writes one file per processed input:
+
+```
+_staging/<YYYY-MM-DD>-<session8>.md      (sessions: first 8 chars of the id)
+_staging/<YYYY-MM-DD>-inbox-<slug>.md    (inbox items)
+```
+
+Digest frontmatter (all fields required unless noted):
+
+```yaml
+---
+session: <full session id, or inbox filename>
+captured: <ISO timestamp of ingest>
+target: <proposed integration page, e.g. 03_work/todobot>   # best guess
+category: 0X_<name>          # proposed category
+tags: []                     # proposed tags per taxonomy below
+confidence: high|medium|low
+diary_pending: <text>        # optional — see diary rules below
+---
+```
+
+Body: the extracted signal (decisions, requirements, findings, entities,
+links, publications) in plain markdown. Verbose is fine — distill will
+compress. **Never edit curated pages from ingest**; `target` is a
+proposal that distill re-judges at integration time.
+
+- `_staging/archive/` holds digests already integrated by distill.
+  Distill **moves** (never deletes) processed digests there, so
+  provenance survives. Exclude `_staging/archive/` from Obsidian graph
+  and search.
+- Digest files are machine-owned: the user should not edit them (edits
+  are tolerated but may be overwritten by re-capture).
 
 ## Wiki meta files (auto-maintained at vault root)
 
 | File | Role | Maintained by |
 |---|---|---|
-| `<vault>/index.md` | Catalog of every page grouped by category. Regenerated from filesystem at the end of every `/wiki-ingest` run. **Do not hand-edit.** | `/wiki-ingest` |
-| `<vault>/log.md` | Append-only chronological record of every `/wiki-*` operation (ingest/query/lint/status). One line per invocation. | every `/wiki-*` skill |
-| `<vault>/_schema.md` | Read-only mirror of this file. Exists so the schema is visible when browsing the vault in Obsidian without access to the plugin repo. Overwritten on every ingest. **Do not hand-edit.** | `/wiki-ingest` |
+| `<vault>/index.md` | Catalog of every page grouped by category. Regenerated from the filesystem at the end of every `/wiki-ingest` and `/wiki-distill` run. **Do not hand-edit.** | `/wiki-ingest`, `/wiki-distill` |
+| `<vault>/home.md` | **Human entry point.** Active work/life projects, recent major decisions, link to 00_self. Curated prose, not a catalog. | `/wiki-distill` |
+| `<vault>/log.md` | Append-only chronological record of every `/wiki-*` operation (ingest/distill/query/lint/status). One line per invocation. **Operational telemetry goes here and only here.** | every `/wiki-*` skill |
+| `<vault>/_schema.md` | Read-only mirror of this file. Overwritten on every ingest. **Do not hand-edit.** | `/wiki-ingest` |
 
 Log line format:
 ```
-- YYYY-MM-DDTHH:MM:SSZ  op:<ingest|query|lint|status>  <one-line summary>
+- YYYY-MM-DDTHH:MM:SSZ  op:<ingest|distill|query|lint|status>  <one-line summary>
 ```
 
 Examples:
 ```
-- 2026-04-23T02:30:00Z  op:ingest  S=3 I=1 pages=8 unsortable=0
-- 2026-04-23T09:15:00Z  op:query   "when did we fix the auth bug?" → 03_work/meguru-pm-report
-- 2026-04-23T10:00:00Z  op:lint    contradictions=2 orphans=5 stale=3
+- 2026-07-09T02:30:00Z  op:ingest   S=3 I=1 staged=4 diary=2 staging_backlog=9
+- 2026-07-09T09:15:00Z  op:distill  staged=9 pages=5 self=1 home=updated
+- 2026-07-09T10:00:00Z  op:query    "when did we fix the auth bug?" → 03_work/meguru-pm-report
 ```
 
 ## Categories
 
-| #  | Folder         | Purpose |
-|----|----------------|---------|
-| 00 | `00_self/`     | Profile, values, skills inventory, self-description |
-| 01 | `01_inbox/`    | **Bidirectional hopper.** Unsorted captures and ingest failures. |
-| 02 | `02_diary/`    | Daily log. One file per day: `YYYY-MM-DD.md`. |
-| 03 | `03_work/`     | Work: projects, meetings, professional learnings |
-| 04 | `04_life/`     | Private life: family, hobbies, daily living |
-| 05 | `05_learn/`    | Learnings: tech notes, reading notes, study |
-| 06 | `06_output/`   | **Artifacts published externally** by the user, LLMs, or services they run. Store the artifact if small; otherwise a link catalog. |
-| 07 | `07_archive/`  | Deprecated or completed. |
+| #  | Folder         | Layer | Purpose |
+|----|----------------|-------|---------|
+| 00 | `00_self/`     | knowledge | **The digital-twin core.** Profile, values, skills, goals, preferences. Updated by distill from accumulated signals. |
+| 01 | `01_inbox/`    | raw   | **Bidirectional hopper.** Unsorted manual captures and ingest failures. |
+| 02 | `02_diary/`    | capture | Daily log of **user activity**. One file per day: `YYYY-MM-DD.md`. No operational telemetry. |
+| 03 | `03_work/`     | knowledge | Work: projects, meetings, professional learnings |
+| 04 | `04_life/`     | knowledge | Private life: family, hobbies, daily living |
+| 05 | `05_learn/`    | knowledge | Learnings: tech notes, reading notes, study |
+| 06 | `06_output/`   | knowledge | **Artifacts published externally.** Store the artifact if small; otherwise a link catalog. |
+| 07 | `07_archive/`  | knowledge | Deprecated or completed. |
+
+## Curated page standard structure (03_work / 04_life)
+
+```markdown
+---
+title: <short title>
+category: 0X_<name>
+tags: []
+sources: [<session-id or inbox-file>, ...]
+updated: YYYY-MM-DD
+---
+
+# <title>
+
+## Summary
+<3-5 lines: what this is, why it matters>
+
+## 現在の状態
+<latest snapshot — distill overwrites this each run; the displaced
+ previous state moves into 経緯 with its date>
+
+## 決定事項
+- YYYY-MM-DD: <decision> — <reason>   (cumulative, never silently removed)
+
+## 手順・Runbook
+<reproducible operations, commands, checklists — only if applicable>
+
+## 経緯
+<compressed timeline of key events; details resolve via frontmatter
+ sources, [[02_diary/...]] links, and _staging/archive/>
+
+## Links
+- [[...]]
+```
+
+The three query archetypes map onto this structure: *今どうなってる？*
+→ 現在の状態, *なぜそう決めた？* → 決定事項, *どうやるんだっけ？* →
+手順・Runbook. **Never create session-dated H2 append silos** — that is
+the anti-pattern this schema replaces.
+
+05_learn keeps its Summary/Details shape but follows the same principle:
+**stable headings = topics; chronology is quarantined into a 経緯 or
+observation-log subsection.** 00_self pages are free-form curated prose.
 
 ## Tag taxonomy
 
@@ -68,7 +151,7 @@ within the category:
 
 | Category   | Primary tag form     | Examples |
 |------------|----------------------|----------|
-| 00_self    | `aspect:<slug>`      | `aspect:profile`, `aspect:values`, `aspect:skills`, `aspect:goals` |
+| 00_self    | `aspect:<slug>`      | `aspect:profile`, `aspect:values`, `aspect:skills`, `aspect:goals`, `aspect:preferences` |
 | 03_work    | `project:<slug>`     | `project:meguru-pm-report`, `project:yahatayama-rokujizo` |
 | 04_life    | `domain:<slug>`      | `domain:house`, `domain:finance`, `domain:family`, `domain:health`, `domain:hobby` |
 | 05_learn   | `topic:<slug>`       | `topic:claude-code`, `topic:google-sheets`, `topic:real-estate-law` |
@@ -105,110 +188,111 @@ within the category:
 Any other prefix is treated as a free-form tag (allowed but not
 recognized as primary).
 
-### Ingest behavior (tags)
+### Tag behavior
 
-- **Create**: derive tags from classification signals. Always assign the
-  primary tag for the category.
-- **Update**: merge new tags into existing; never drop a tag unless the
-  content clearly no longer applies.
+- **Ingest (staging digests)**: propose tags in the digest frontmatter;
+  always propose the primary tag for the proposed category.
+- **Distill (curated pages)**: on create, assign the primary tag; on
+  update, merge new tags without dropping prior ones unless the content
+  clearly no longer applies.
 - **Archive (`git mv` to `07_archive/`)**: preserve existing tags,
   append `status:archived` and `archived:YYYY-MM-DD`.
 
-Existing pages predating this taxonomy are grandfathered; ingest
-normalizes them opportunistically on the next update that touches them.
-`/wiki-lint` reports pages still missing a primary tag so the user can
-prioritize cleanup.
+## `02_diary/` rules
 
-## `01_inbox/` is bidirectional
-
-- **Out**: `/wiki-ingest` puts anything it cannot confidently classify here,
-  prepended with a `> [!question] Needs sorting` callout citing the source
-  session or inbox file.
-- **In**: The user drops raw notes here by hand any time. On the next
-  `/wiki-ingest`, those notes are processed together with the session
-  transcripts from the queue and moved into 00/02-07 if classifiable.
-
-## `06_output/` auto-detection
-
-Add a page whenever the session or an inbox note contains evidence of an
-**external publication** — e.g., a Gmail draft sent, a Threads/X post
-created, a URL returned by a deploy, a PR opened, a doc shared via
-Google Drive, a file uploaded somewhere public. Rules:
-
-- Small artifact (≤ ~200 lines): paste verbatim inside the `06_output/` page.
-- Large artifact: link-only page with title, URL, date, originating session.
-- Group by month: `06_output/YYYY-MM.md` is the default index file; create a
-  dedicated page only when one artifact deserves more than a bullet.
-
-## `02_diary/` granularity
-
-One file per day: `02_diary/YYYY-MM-DD.md`. Ingest **appends** to the current
-day's file; it never overwrites prior entries. Entry minimum:
+One file per day: `02_diary/YYYY-MM-DD.md`. Ingest **appends**; it never
+overwrites prior entries. Diary records **what the user (and Claude)
+accomplished** — shipped features, decisions made, things published,
+problems solved.
 
 ```markdown
-## HH:MM  <short headline>
-- session: <id>  cwd: <repo-leaf>
-- <2-5 bullets: what was done, decisions, surprises>
+## HH:MM  <short headline of the accomplishment>
+- session: <id8>  cwd: <repo-leaf>
+- <1-3 bullets: what was done / decided / published>
 - see also: [[...]]
 ```
 
-## Page template (non-diary)
+**Prohibited in diary**: run numbers, queue statistics, defer/meta-ack
+bookkeeping, missing-transcript accounting, cursor positions — all
+operational telemetry belongs in `log.md` and
+`~/.claude/wiki/state/ingest-log.jsonl` only. **Wiki meta-sessions**
+(sessions whose only content is running `/wiki-*` skills) get **no
+diary entry at all** — ack them in `log.md`.
 
-```markdown
----
-title: <short title>
-category: 0X_<name>
-tags: []
-sources: [<session-id or inbox-file>, ...]
-updated: YYYY-MM-DD
----
+If the day's diary file is dirty (user editing), do **not** defer the
+item: put the would-be diary text into the digest's `diary_pending:`
+frontmatter field; distill lands it later.
 
-# <title>
+## `01_inbox/` is bidirectional
 
-## Summary
-<2-4 lines>
+- **Out**: `/wiki-ingest` leaves anything it cannot confidently classify
+  here with a `> [!question] Needs sorting` callout citing the source.
+- **In**: The user drops raw notes here by hand any time. On the next
+  `/wiki-ingest`, classifiable notes become staging digests
+  (`_staging/<date>-inbox-<slug>.md`) and the originals are removed;
+  unclassifiable notes stay with the callout.
 
-## Details
-...
+## `06_output/` auto-detection
 
-## Links
-- [[...]]
-```
+Flag evidence of an **external publication** in the digest — e.g., a
+Gmail draft sent, a Threads/X post created, a URL returned by a deploy,
+a PR opened, a doc shared via Google Drive. Distill files it:
 
-## Ingestion rules
+- Small artifact (≤ ~200 lines): paste verbatim inside the `06_output/` page.
+- Large artifact: link-only entry with title, URL, date, originating session.
+- Group by month: `06_output/YYYY-MM.md` is the default index file; create a
+  dedicated page only when one artifact deserves more than a bullet.
+
+## Ingestion rules (`/wiki-ingest` — capture layer)
 
 1. **Two input sources per run**: `~/.claude/wiki/state/queue.jsonl` +
    every `.md` file directly under `<vault>/01_inbox/` (non-recursive,
    exclude hidden files).
-2. **Always write a diary entry** for each session processed. Multiple
-   sessions on the same day append — do not clobber.
-3. **Classification first, writing second.** A single input may produce
-   multiple outputs (diary entry + 05_learn page + 06_output link).
-4. **Low confidence → inbox.** Leave the content in `01_inbox/` with a
-   `> [!question] Needs sorting` callout listing candidate categories.
-5. **`06_output/` requires evidence of external publication.** Do not
-   file internal notes there.
-6. **Prefer update > create.** Grep for existing pages and merge.
-7. **Contradictions**: `> [!warning] Contradiction` callout rather than
-   silent overwrite.
-8. **Cross-link**: every new page must contain ≥ 1 `[[wiki-link]]`.
-9. **Audit trail (machine)**: append to `~/.claude/wiki/state/ingest-log.jsonl`
+2. **One digest file per input, into `_staging/`.** New file creation
+   only — never modify curated pages, never defer waiting for them.
+3. **Persist before retention.** Read the transcript on first
+   processing and write the digest in the same run, so transcript
+   deletion (~30-day retention) can never lose knowledge.
+4. **Diary entry per substantive session** (user-activity format above;
+   meta-sessions skipped; dirty diary → `diary_pending` in the digest).
+5. **Low confidence → inbox** with the `> [!question]` callout.
+6. **Audit trail (machine)**: append to `~/.claude/wiki/state/ingest-log.jsonl`
    one line per input processed.
-10. **Wiki meta refresh** (at the end of every `/wiki-ingest`):
-    - Regenerate `<vault>/index.md` from the filesystem (alphabetical
-      within each category, skip dotfiles and root welcome notes).
-    - Append one-line entry to `<vault>/log.md`.
-    - Copy `${CLAUDE_PLUGIN_ROOT}/schema.md` to `<vault>/_schema.md`
-      (only if different) with a prepended note:
-      `> Read-only mirror. Canonical copy is ${CLAUDE_PLUGIN_ROOT}/schema.md. Overwritten on next /wiki-ingest.`
-11. **Commit, never push.** `git commit` in the vault after a batch; the
-    user decides when to `git push`.
+7. **Meta refresh**: regenerate `index.md`, append one line to `log.md`
+   (including the current staging backlog count), mirror `_schema.md`.
+8. **Commit, never push** from the skill (the hook may push afterwards).
+
+## Distillation rules (`/wiki-distill` — knowledge layer)
+
+1. **Group staging digests by integration target** (re-judging the
+   proposed `target`), then merge each group into the curated page
+   using the standard structure. Prefer update > create.
+2. **現在の状態 is overwritten; nothing else is silently lost.** The
+   displaced state moves into 経緯 with its date. 決定事項 is
+   cumulative. Contradictions that cannot be resolved get a
+   `> [!warning] Contradiction` callout with both versions.
+3. **Compress 経緯**; details stay reachable via `sources:`, diary
+   links, and `_staging/archive/`.
+4. **Update frontmatter** on every touched page: merge `sources:`, set
+   `updated:`, apply tags per taxonomy.
+5. **Cross-link**: every touched page ends with ≥ 1 `[[wiki-link]]`.
+6. **Self-model pass**: scan the batch for self signals (preferences,
+   judgment criteria, skill changes, goal progress) and update 00_self
+   (profile / skills / values / goals / preferences) when warranted.
+7. **Land `diary_pending`** entries into their diary files.
+8. **Move processed digests to `_staging/archive/`** — never delete.
+9. **Maintain `home.md`** (active projects, recent major decisions,
+   00_self link) and regenerate `index.md`.
+10. **Append one line to `log.md`**, then commit. Distill runs attended;
+    if a curated target is dirty, resolve it with the user on the spot.
 
 ## Non-goals
 
 - Touching `ようこそ.md` or `make folders composition.md` — those are the
   user's welcome notes; leave alone.
-- Pushing to GitHub from ingest — the user controls when to `git push`.
+- Pushing to GitHub from skills — the hook/user controls `git push`.
 - Hand-editing `index.md`, `log.md`, or `_schema.md` — they are
   auto-maintained. For `log.md`, append-only via skill code; never rewrite
   history.
+- Editing digest files by hand — capture is machine-owned; fix content
+  at the curated page (knowledge layer) instead.

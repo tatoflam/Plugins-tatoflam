@@ -1,18 +1,27 @@
 ---
 name: wiki-ingest
-description: Drain both the session queue AND the manual inbox into the 00-07 wiki vault. Reads session transcripts enqueued by the SessionEnd hook, plus any .md the user dropped into 01_inbox/, classifies each into the appropriate category (00_self / 02_diary / 03_work / 04_life / 05_learn / 06_output / 07_archive), appends a daily diary entry, and commits to the vault. Unclassifiable items stay in 01_inbox/ with a question callout. Use when the user says "ingest", "update wiki", "取り込み", "wiki更新", or runs /wiki-ingest.
+description: Drain both the session queue AND the manual inbox into the vault's capture layer. Reads session transcripts enqueued by the SessionEnd hook, plus any .md the user dropped into 01_inbox/, writes one digest per input into _staging/ (with a proposed classification for /wiki-distill), appends a user-activity diary entry, and commits to the vault. Never touches curated pages. Use when the user says "ingest", "update wiki", "取り込み", "wiki更新", or runs /wiki-ingest.
 ---
 
 # /wiki-ingest
 
-Fold new Claude Code sessions and user-dropped inbox notes into the vault at
+Capture new Claude Code sessions and user-dropped inbox notes into the
+**capture layer** (`_staging/` + `02_diary/`) of the vault at
 `~/repo/github/tatoflam/v`. The canonical rules live in the plugin's
-`schema.md` (sibling of this directory) — **read it before editing any page**.
+`schema.md` (sibling of this directory) — **read it first**.
+
+This skill is the reliable, non-interactive half of the pipeline. It
+NEVER writes to curated pages (00/03/04/05/06/07) — integration is
+`/wiki-distill`'s job, run attended. Because staging writes are new-file
+creations, there is nothing to conflict with and nothing to defer:
+**every enqueued session lands on first processing**, before Claude
+Code's ~30-day transcript retention can delete the source.
 
 ## Paths
 
-- **Vault**: `~/repo/github/tatoflam/v` (Obsidian vault; its own git repo;
-  pushed to GitHub by the user — never by this skill).
+- **Vault**: `~/repo/github/tatoflam/v` (Obsidian vault; its own git repo).
+- **Staging**: `<vault>/_staging/` (digests) and `<vault>/_staging/archive/`
+  (distilled digests — owned by /wiki-distill, never write there).
 - **Runtime state**: `~/.claude/wiki/state/`
   - `queue.jsonl` — session pointers enqueued by the SessionEnd hook.
   - `cursors.json` — `{ "<transcript_path>": <byte_offset> }` for
@@ -42,15 +51,18 @@ For each session in the queue AND each inbox file:
 a. **Read the content.**
    - Sessions: read transcript from `cursors[path]` to end. Parse only
      `"type":"user"` and `"type":"assistant"` lines. Cap at the last ~200
-     turns. If truncated, note in the diary entry.
+     turns. If truncated, note it in the digest.
    - Inbox: read the file verbatim.
 
 b. **Extract signal.** Drop tool-call noise, resolved typos, transient
    errors. Keep: decisions, requirements, surprising findings, named
-   entities, external links, artifacts published anywhere.
+   entities, external links, artifacts published anywhere. Verbose is
+   fine — distill compresses later; losing signal here loses it forever.
 
-c. **Classify.** Score the content against 00/03/04/05/06/07. A single
-   input usually produces multiple outputs.
+c. **Classify (as a proposal).** Score the content against
+   00/03/04/05/06/07 and pick the integration target page (grep the
+   vault for an existing page on the same subject — prefer update >
+   create, but you are only *proposing*; distill re-judges).
 
    Category hints:
    - **00_self**: self-reflection statements about identity, values, skills.
@@ -65,87 +77,57 @@ c. **Classify.** Score the content against 00/03/04/05/06/07. A single
      Google Drive share. See schema.md §"06_output/ auto-detection".
    - **07_archive**: explicit "we dropped this", "deprecated", "replaced".
 
-d. **Low confidence → inbox.** If no category scores clearly:
-   - For a session: create
-     `01_inbox/session-<id>-<YYYY-MM-DD>.md` with extracted notes AND a
-     `> [!question] Needs sorting\n> Candidate categories: <list>`
-     callout at the top.
-   - For an inbox file: leave it in place; prepend the callout.
+   **Wiki meta-session check**: if the session's only content is running
+   `/wiki-*` skills (ingest/distill/lint/status runs, including this
+   skill's own prior runs), do NOT create a digest or diary entry —
+   acknowledge it in the `log.md` line summary and mark it processed.
 
-d2. **Dirty-target gate (defer if the user is editing).** Before any write:
-   - Enumerate the target files this item will touch:
-     `02_diary/<YYYY-MM-DD>.md` (always, per step e) plus any vault page
-     the classification (c/d) will create or modify. Use the *update >
-     create* match from step f to identify the existing page you would
-     touch — a read-only grep, no write yet.
-   - For each target path, run
-     `git -C <vault> status --porcelain -- <path>`. Non-empty output
-     means the working copy is dirty — the user may be live-editing the
-     file in Obsidian/VSCode. Writing would race with the editor's
-     in-memory buffer and get silently overwritten on the next save.
-   - If *any* content target is dirty, **defer the whole item**:
-     - Leave `processed: false` in the queue (retried on next run).
-     - Append one line to `~/.claude/wiki/state/hook-errors.log`:
-       `<ISO>  session=<id>  skip=dirty_working_copy  files=[<p1>, ...]`
-     - Do not emit a row in `ingest-log.jsonl` (no audit trail for
-       deferred work — it will be logged when it actually lands).
-     - Count the item under "Deferred" in the final report and skip to
-       the next queue item.
-   - Skill-owned meta files (`log.md`, `index.md`, `_schema.md`) are not
-     user-editable and are excluded from this check.
+d. **Write the digest** to `_staging/<YYYY-MM-DD>-<session8>.md`
+   (sessions) or `_staging/<YYYY-MM-DD>-inbox-<slug>.md` (inbox), using
+   the frontmatter from schema.md §"_staging/":
+   `session / captured / target / category / tags / confidence`
+   (+ `diary_pending` when needed, see f). New file creation only —
+   if the name collides (same session re-captured), suffix `-2`.
 
-e. **Always write the diary entry.** Regardless of classification, append
-   to `02_diary/<YYYY-MM-DD>.md`. Create the file if missing. Never
-   overwrite prior entries.
+e. **Low confidence → inbox.** If no category scores clearly, still
+   write the digest (with `confidence: low` and your best-guess target)
+   AND leave/create the note in `01_inbox/` with a
+   `> [!question] Needs sorting\n> Candidate categories: <list>`
+   callout so the user sees it.
 
-f. **Prefer update > create.** Grep the vault for existing pages on the
-   same subject and merge. Use the page template from schema.md.
+f. **Diary entry (user activity only).** For each substantive session,
+   append to `02_diary/<YYYY-MM-DD>.md` (create if missing; never
+   overwrite prior entries):
+   ```markdown
+   ## HH:MM  <short headline of the accomplishment>
+   - session: <id8>  cwd: <repo-leaf>
+   - <1-3 bullets: what was done / decided / published>
+   - see also: [[...]]
+   ```
+   **No operational telemetry** — run numbers, queue stats, defer/ack
+   bookkeeping, cursor positions are prohibited in the diary (they go in
+   `log.md` / `ingest-log.jsonl`). If the day's diary file is dirty
+   (`git -C <vault> status --porcelain -- <path>` non-empty), do NOT
+   defer: put the entry text into the digest's `diary_pending:`
+   frontmatter field instead; distill lands it later.
 
-g. **Contradictions**: `> [!warning] Contradiction` callout with both
-   versions and source ids. No silent overwrite.
-
-h. **Cross-link.** Every edit leaves the page with ≥ 1 `[[wiki-link]]`.
-
-i. **Cite and tag every edit.** Update frontmatter on every page you
-   touch:
-   - `sources:` — append the session id or inbox filename if not
-     already present.
-   - `updated:` — set to today's date.
-   - `tags:` — apply the taxonomy in schema.md §"Tag taxonomy":
-     - **Create**: assign the primary tag for the category
-       (`project:<slug>` for 03_work, `domain:<slug>` for 04_life,
-       `topic:<slug>` for 05_learn, `channel:<slug>` for 06_output,
-       `aspect:<slug>` for 00_self) plus any obvious secondary tags
-       (`tech:`, `client:`, `entity:`, `stage:`).
-     - **Update**: merge new tags into the existing array without
-       dropping prior entries. If the page predates the taxonomy and
-       has only bare tags (e.g. `[meguruit, python]`), add the primary
-       prefixed tag alongside them — do not rewrite existing bare tags.
-     - **Archive** (moving to `07_archive/`): preserve existing tags,
-       append `status:archived` and `archived:<YYYY-MM-DD>`.
-   - Follow schema.md slug rules: lowercase, hyphen-separated, singular,
-     reuse before invent.
-
-j. **Mark source processed.**
-   - Sessions: set `cursors[path]` to current byte length.
-   - Inbox files moved: `git mv` to the destination folder, rename if
-     needed to match the destination page.
-   - Inbox files merged into an existing page: delete after the merge
-     commits successfully.
-   - Inbox files that stayed: keep in place with the question callout.
-
-**Also run the dirty-target gate before the meta refresh in step 4.** If
-the current ingest has already written to at least one content page,
-proceed — but if *all* sessions deferred and no content pages changed,
-skip steps 4–6 and exit with a "nothing to commit (all deferred)"
-report.
+g. **Mark source processed.**
+   - Sessions: set `cursors[path]` to current byte length; flip
+     `processed: true` in the queue.
+   - Missing transcript (never landed / deleted): log
+     `<ISO>  session=<id>  skip=missing_transcript` to `hook-errors.log`,
+     flip `processed: true`, count it in the report.
+   - Inbox files captured into a digest: delete the original (its content
+     lives in the digest; git history preserves the original).
+   - Inbox files that stayed (low confidence): keep in place with the
+     question callout.
 
 ### 3. Audit trail (machine)
 Append one JSONL line per input to `~/.claude/wiki/state/ingest-log.jsonl`:
 ```json
 {"ts":"<ISO>","source_type":"session|inbox","source_id":"<id or path>",
- "pages_touched":["02_diary/2026-04-23.md","05_learn/..."],
- "unsortable":false}
+ "digest":"_staging/2026-07-09-ab12cd34.md","diary":true,
+ "confidence":"high","unsortable":false}
 ```
 
 ### 4. Wiki meta refresh
@@ -169,14 +151,18 @@ a. **Regenerate `<vault>/index.md`** from the filesystem. Overwrite
    - [[07_archive/<name>]]
    ```
    Alphabetical within each section except `02_diary` which is reverse
-   chronological. Exclude dotfiles and the root welcome notes
-   (`ようこそ.md`, `make folders composition.md`). Include `01_inbox`
-   as a count line only: `_<N> pending items_`.
+   chronological. Exclude dotfiles, `_staging/`, and the root welcome
+   notes (`ようこそ.md`, `make folders composition.md`). Include
+   `01_inbox` as a count line only: `_<N> pending items_`.
 
 b. **Append to `<vault>/log.md`** (create if missing with a header):
    ```
-   - <ISO>  op:ingest  S=<sessions> I=<inbox> pages=<M> unsortable=<K>
+   - <ISO>  op:ingest  S=<sessions> I=<inbox> staged=<D> diary=<E> missing=<K> staging_backlog=<B>
    ```
+   `staging_backlog` = count of `.md` files directly under `_staging/`
+   after this run (i.e., not yet distilled). Telemetry detail
+   (meta-acks, missing ids, races) goes in a parenthetical on this line
+   — never in the diary.
 
 c. **Mirror schema to `<vault>/_schema.md`.** Read
    `${CLAUDE_PLUGIN_ROOT}/schema.md`, prepend:
@@ -196,43 +182,44 @@ days for audit, then drop.
 ### 6. Commit in vault
 ```
 cd ~/repo/github/tatoflam/v
-git add -A
-git diff --cached --quiet || git commit -m "ingest: <S> sessions + <I> inbox, <M> pages touched"
+git add _staging 02_diary index.md log.md _schema.md 01_inbox
+git diff --cached --quiet || git commit -m "capture: <S> sessions + <I> inbox → <D> digests (backlog <B>)"
 ```
-If the vault is not yet a git repo, skip the commit and say so in the
-report. **Do NOT push.**
+Scope `git add` to capture-layer paths — never `git add -A` (it would
+sweep up the user's in-progress edits to curated pages). **Do NOT push.**
 
 ### 7. Report
 ```
 Sessions processed: <S>    Inbox items processed: <I>
-Deferred (dirty working copy): <D>
-Pages touched: <M>
-Moved to category: <N>    Left in inbox (needs sorting): <K>
+Digests written: <D>    Diary entries: <E>    Missing transcripts: <K>
+Staging backlog (awaiting /wiki-distill): <B>
 
 Needs your attention:
 - 01_inbox/<file>  candidates: [03_work, 05_learn]
   (rationale: ...)
-
-Deferred this run (will retry when user commits/closes edits):
-- session <id>  files=[02_diary/<date>.md, 03_work/<page>.md]
 ```
-End with a single actionable next step.
+If `B >= 10` or the oldest digest is > 7 days old, end with:
+"Staging backlog is piling up — run `/wiki-distill` to integrate it."
+Otherwise end with a single actionable next step.
 
 ## Guardrails
 
+- **Never write to curated pages** (00/03/04/05/06/07 or `home.md`).
+  Capture goes to `_staging/` + `02_diary/` only. There is no
+  dirty-target defer anymore — staging never conflicts.
+- **Never write to `_staging/archive/`** — that's distill's output.
 - **Idempotent**: `cursors.json` + `ingest-log.jsonl` ensure re-runs are
   no-ops on already-processed content.
-- **Never write to a file with uncommitted modifications in the vault
-  working copy.** The user may be live-editing it; our append would race
-  with the editor buffer and get silently overwritten on save. Defer the
-  session (see Procedure §2.d2) and retry on the next run.
+- **Concurrent-run stand-down**: if another ingest is mid-flight
+  (uncommitted `_staging/` files with mtime seconds ago, or a running
+  worker pid), yield without writing — log the stand-down to
+  `hook-errors.log`.
 - **Never write runtime state into the vault.** Queue, cursors, logs all
   live under `~/.claude/wiki/state/`.
 - **Never edit vault welcome files**: `ようこそ.md`,
   `make folders composition.md` at vault root — pre-existing user notes.
 - **Never push to GitHub.**
-- **Never delete pages**; archive via `git mv` into `07_archive/` with an
-  `> [!info] Archived YYYY-MM-DD (source:<id>)` callout.
+- **Never delete pages.**
 - **Per-run caps**: 20 sessions + 50 inbox files. Leftover stays queued.
 - **Hook failures** (missing transcript, etc.) go to
   `~/.claude/wiki/state/hook-errors.log`; skip and continue the batch.
