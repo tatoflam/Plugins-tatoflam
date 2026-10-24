@@ -23,6 +23,8 @@ DRY=0; [[ "${1:-}" == "--dry-run" ]] && DRY=1
 
 [[ -f "${CONF_DIR}/weekly.conf" ]] && . "${CONF_DIR}/weekly.conf"
 export PATH="${HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
+# A stalled ssh (seen with GitLab on 2026-10-24) must not hang the job forever.
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes}"
 mkdir -p "${STATE}"
 exec >>"${LOG}" 2>&1
 
