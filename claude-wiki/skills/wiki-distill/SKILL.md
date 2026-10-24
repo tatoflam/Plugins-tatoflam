@@ -38,6 +38,7 @@ empty), report "nothing to distill" and stop.
 | 00_self updates | apply | **queue for review** |
 | `_staging/review/` queue | present first and resolve | never resolves, only adds |
 | per-run cap | ~30 digests | ~60 digests, oldest first |
+| commits | once at the end | **after each page group** (page + its archived digests + review items), so a watchdog kill only means "did less" |
 
 A **review item** is a file `_staging/review/<YYYY-MM-DD>-<slug>.md`
 with frontmatter `kind: self|contradiction`, `page:`, `sources:` and a
