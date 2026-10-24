@@ -95,7 +95,8 @@ git -C "${TODO}" pull --rebase --autostash -q || { git -C "${TODO}" rebase --abo
 
 if (( DRY )); then
   echo "dry-run: would run ${CLAUDE} -p /claude-wiki:wiki-weekly in ${VAULT}"
-  python3 "$(dirname "$0")/todo_parse.py" --todo-dir "${TODO}" --projects | head -c 400; echo
+  python3 "$(dirname "$0")/todo_parse.py" --todo-dir "${TODO}" --projects \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); print("todo week", d["week"]["file"], "items", len(d["items"]), "unmapped", d["unmapped"])' 
   exit 0
 fi
 
