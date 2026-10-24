@@ -37,6 +37,14 @@ SessionEnd hook ──▶ queue.jsonl ──▶ /wiki-ingest ──▶ _staging/
    Undistilled staging content is used only as a labeled fallback.
 5. Supporting skills: **`/wiki-lint`** (audit contradictions/orphans/
    stale), **`/wiki-status`** (queue + staging backlog + page stats).
+6. **todo loop** (v = past, a weekly-markdown todo repo = future):
+   ingest matches each session to the week's todo items and regenerates
+   a human-readable daily roll-up; deliverables are extracted
+   mechanically into `06_output/catalog/`. **`/wiki-next`** suggests
+   today's 3-5 actions (read-only); **`/wiki-weekly`** (launchd, Sunday
+   08:00) runs unattended distill, writes a plan-vs-actual review and
+   drops next week's draft into the todo repo's `_proposals/` — it never
+   edits the user's week files.
 
 The vault itself is a separate, publishable git repo — Obsidian opens it
 directly; push it to GitHub when you want.
@@ -92,7 +100,19 @@ and schema.md. Fork and edit if yours is elsewhere — all references use
 operation.
 
 Runtime state lives in `~/.claude/wiki/state/` (queue, cursors,
-ingest-log, hook-errors). The hook auto-creates this on first use.
+ingest-log, hook-errors). Per-host setup (dirs, SessionEnd auto-ingest
+hook, weekly launchd job, git merge driver):
+
+```bash
+claude-wiki/scripts/wiki-setup.sh --hook            # every host that captures sessions
+claude-wiki/scripts/wiki-setup.sh --hook --weekly   # the always-on host
+```
+
+Host-local config (never committed): `~/.claude/wiki/config/capture.conf`
+(allow/deny cwd prefixes, fail-closed), `push.conf` (vault visibility for
+hosts without `gh`), `weekly.conf` (`WIKI_NOTIFY_CMD`). The todo repo
+path defaults to `~/repo/gitlab/tatoflam/todo` (env `WIKI_TODO_DIR`);
+its `_projects.yml` maps todo headings to vault pages.
 
 ## Operation
 
@@ -104,6 +124,9 @@ ingest-log, hook-errors). The hook auto-creates this on first use.
 4. Ask the vault things with `/wiki-query`; browse via `home.md` in
    Obsidian; `git push` when you like.
 5. Run `/wiki-lint` weekly, `/wiki-status` any time.
+6. Ask `/wiki-next` in the morning; on Sunday read the review in
+   `02_diary/weekly/` and the draft in `<todo>/_proposals/`, adopt what
+   you want into your own week file.
 
 ## Why not just RAG over transcripts?
 

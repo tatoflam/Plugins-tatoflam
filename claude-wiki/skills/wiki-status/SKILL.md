@@ -32,6 +32,14 @@ One-shot status readout. No edits.
 8. **Hook errors** — tail of `~/.claude/wiki/state/hook-errors.log` if
    present.
 9. **Recent ops** — last 5 lines of `<vault>/log.md`.
+10. **Weekly job** — latest `op:weekly` line in `<vault>/log.md` (ok or
+    failed + stage), and the newest file in `<todo>/_proposals/`
+    (`${WIKI_TODO_DIR:-~/repo/gitlab/tatoflam/todo}`) with whether the
+    corresponding week file exists yet (exists = the user has adopted
+    the week; missing = proposal unread/unadopted).
+11. **Review queue** — count of `_staging/review/*.md`.
+12. **Stray deliverables** — count of non-markdown, non-dot files at the
+    vault root (should be 0; see /wiki-lint).
 
 ## Output format
 
@@ -52,6 +60,10 @@ Pages:
   07 archive     <N>
 Vault git:       <clean | N uncommitted | not a git repo>
 Hook errors:     <none | last 3 lines>
+Weekly job:      <last op:weekly ts + ok|failed@stage, or "never">
+Next proposal:   <_proposals/<file> — adopted|not yet adopted, or none>
+Review queue:    <N> items awaiting attended /wiki-distill
+Stray files:     <N> at vault root
 Recent ops:      <last 5 lines of log.md>
 ```
 

@@ -1,12 +1,12 @@
 ---
 name: wiki-ingest
-description: Drain both the session queue AND the manual inbox into the vault's capture layer. Reads session transcripts enqueued by the SessionEnd hook, plus any .md the user dropped into 01_inbox/, writes one digest per input into _staging/ (with a proposed classification for /wiki-distill), appends a user-activity diary entry, and commits to the vault. Never touches curated pages. Use when the user says "ingest", "update wiki", "取り込み", "wiki更新", or runs /wiki-ingest.
+description: Drain both the session queue AND the manual inbox into the vault's capture layer. Reads session transcripts enqueued by the SessionEnd hook, plus any .md the user dropped into 01_inbox/, writes one digest per input into _staging/ (with a proposed classification for /wiki-distill and a match against the todo week), extracts deliverables into 06_output/catalog/, regenerates the day's diary roll-up, and commits to the vault. Never touches curated pages. Use when the user says "ingest", "update wiki", "取り込み", "wiki更新", or runs /wiki-ingest.
 ---
 
 # /wiki-ingest
 
 Capture new Claude Code sessions and user-dropped inbox notes into the
-**capture layer** (`_staging/` + `02_diary/`) of the vault at
+**capture layer** (`_staging/` + `02_diary/` + `06_output/catalog/`) of the vault at
 `~/repo/github/tatoflam/v`. The canonical rules live in the plugin's
 `schema.md` (sibling of this directory) — **read it first**.
 
@@ -29,6 +29,9 @@ Code's ~30-day transcript retention can delete the source.
   - `ingest-log.jsonl` — machine-parseable audit trail.
   - `hook-errors.log` — hook failures (tail if something seems missing).
 - **Schema**: `${CLAUDE_PLUGIN_ROOT}/schema.md` (the plugin's own schema).
+- **todo repo** (read-only): `${WIKI_TODO_DIR:-~/repo/gitlab/tatoflam/todo}`.
+  If it is missing, skip todo matching (`todo:` omitted) and say so in
+  the report — never fail the ingest over it.
 
 ## Inputs
 
@@ -44,6 +47,13 @@ If both are empty, report "nothing to ingest" and stop.
 ### 1. Load state
 Parse `queue.jsonl` and `cursors.json`. List inbox files. Skip inbox files
 already processed recently unless their mtime advanced.
+
+Load the todo week once per distinct session date (JST):
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/todo_parse.py --date <YYYY-MM-DD> --projects
+```
+Keep `week.file`, the items (`id`, `path`, `vault`, `tags`, `star`) for
+matching in step 2.
 
 ### 2. Process each input item
 For each session in the queue AND each inbox file:
@@ -82,11 +92,22 @@ c. **Classify (as a proposal).** Score the content against
    skill's own prior runs), do NOT create a digest or diary entry —
    acknowledge it in the `log.md` line summary and mark it processed.
 
+c2. **Match against the todo week.** Using the item list from step 1
+   (items carry the vault pages / tags mapped via `_projects.yml`),
+   decide which todo items this session advanced. Prefer the deepest
+   matching item; at most ~3 items. For each: `confidence` (high = the
+   session plainly worked on that item; medium = same project, plausibly
+   that item; low = guess) and `progress` (`advanced` = real movement,
+   `done-candidate` = the session shows the item is finished, e.g. a
+   filing submitted, a PR merged that closes it; `touched` = discussed
+   only). If nothing matches, `unplanned: true`. Never decide "done" —
+   only the user's mark is completion.
+
 d. **Write the digest** to `_staging/<YYYY-MM-DD>-<session8>.md`
    (sessions) or `_staging/<YYYY-MM-DD>-inbox-<slug>.md` (inbox), using
    the frontmatter from schema.md §"_staging/":
-   `session / captured / target / category / tags / confidence`
-   (+ `diary_pending` when needed, see f). New file creation only —
+   `session / captured / target / category / tags / confidence / todo`.
+   New file creation only —
    if the name collides (same session re-captured), suffix `-2`.
 
 e. **Low confidence → inbox.** If no category scores clearly, still
@@ -95,21 +116,15 @@ e. **Low confidence → inbox.** If no category scores clearly, still
    `> [!question] Needs sorting\n> Candidate categories: <list>`
    callout so the user sees it.
 
-f. **Diary entry (user activity only).** For each substantive session,
-   append to `02_diary/<YYYY-MM-DD>.md` (create if missing; never
-   overwrite prior entries):
-   ```markdown
-   ## HH:MM  <short headline of the accomplishment>
-   - session: <id8>  cwd: <repo-leaf>
-   - <1-3 bullets: what was done / decided / published>
-   - see also: [[...]]
+f. **Extract deliverables** (sessions only), *before* moving the cursor:
    ```
-   **No operational telemetry** — run numbers, queue stats, defer/ack
-   bookkeeping, cursor positions are prohibited in the diary (they go in
-   `log.md` / `ingest-log.jsonl`). If the day's diary file is dirty
-   (`git -C <vault> status --porcelain -- <path>` non-empty), do NOT
-   defer: put the entry text into the digest's `diary_pending:`
-   frontmatter field instead; distill lands it later.
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/extract_artifacts.py \
+     --transcript <path> --offset <cursors[path] or 0> --write
+   ```
+   It merges into `<vault>/06_output/catalog/YYYY-MM.md` (dedup by
+   path/URL). If a session wrote a deliverable at the vault root, move it
+   to `06_output/files/YYYY-MM/` with `git mv` (or `mv` if untracked)
+   and run `extract_artifacts.py --vault-files --write`.
 
 g. **Mark source processed.**
    - Sessions: set `cursors[path]` to current byte length; flip
@@ -121,6 +136,19 @@ g. **Mark source processed.**
      lives in the digest; git history preserves the original).
    - Inbox files that stayed (low confidence): keep in place with the
      question callout.
+
+### 2b. Regenerate the diary for every touched date
+For each JST date that received a new digest this run (and is
+2026-10-24 or later), rebuild `02_diary/<date>.md` from scratch using
+**all** digests of that date — `_staging/<date>-*.md` and
+`_staging/archive/<date>-*.md` — plus that date's lines in
+`06_output/catalog/`. Format: schema.md §"`02_diary/` rules"
+(今日のまとめ / 予定に対して / 予定外 / 出したもの / 持ち越し + folded
+session index). 予定に対して comes from digests' `todo.items` (group by
+todo heading); 予定外 from `todo.unplanned: true`. Body ≈ 30 lines; no
+command arguments, test counts or telemetry. Overwrite the file (it is
+machine-owned). Wiki meta-sessions contribute nothing. Dates before
+2026-10-24 are never rewritten.
 
 ### 3. Audit trail (machine)
 Append one JSONL line per input to `~/.claude/wiki/state/ingest-log.jsonl`:
@@ -182,7 +210,7 @@ days for audit, then drop.
 ### 6. Commit in vault
 ```
 cd ~/repo/github/tatoflam/v
-git add _staging 02_diary index.md log.md _schema.md 01_inbox
+git add _staging 02_diary 06_output/catalog 06_output/files index.md log.md _schema.md 01_inbox
 git diff --cached --quiet || git commit -m "capture: <S> sessions + <I> inbox → <D> digests (backlog <B>)"
 ```
 Scope `git add` to capture-layer paths — never `git add -A` (it would
@@ -191,7 +219,8 @@ sweep up the user's in-progress edits to curated pages). **Do NOT push.**
 ### 7. Report
 ```
 Sessions processed: <S>    Inbox items processed: <I>
-Digests written: <D>    Diary entries: <E>    Missing transcripts: <K>
+Digests written: <D>    Diaries regenerated: <E>    Deliverables: +<A>    Missing transcripts: <K>
+Todo: week <file> — matched <M>, unplanned <U>, done-candidates <C>
 Staging backlog (awaiting /wiki-distill): <B>
 
 Needs your attention:
@@ -204,9 +233,11 @@ Otherwise end with a single actionable next step.
 
 ## Guardrails
 
-- **Never write to curated pages** (00/03/04/05/06/07 or `home.md`).
-  Capture goes to `_staging/` + `02_diary/` only. There is no
-  dirty-target defer anymore — staging never conflicts.
+- **Never write to curated pages** (00/03/04/05/07, `06_output/YYYY-MM.md`
+  or `home.md`). Capture goes to `_staging/`, `02_diary/<date>.md`,
+  `06_output/catalog/` and `06_output/files/` only. There is no
+  dirty-target defer anymore — capture files are machine-owned.
+- **Never write to the todo repo.** It is read-only for ingest.
 - **Never write to `_staging/archive/`** — that's distill's output.
 - **Idempotent**: `cursors.json` + `ingest-log.jsonl` ensure re-runs are
   no-ops on already-processed content.

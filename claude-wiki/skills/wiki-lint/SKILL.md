@@ -46,6 +46,15 @@ resolving contradictions — that's this skill's job.
     inherited + `status:archived` for 07_archive). Report the count;
     list the paths only if `--verbose` was requested or the count is
     ≤ 10.
+11. **Stray deliverables.** Non-markdown files at the vault root that
+    are not dot-files (e.g. `*.html`, `*.pdf`). Never move them; list each
+    with the suggested destination `06_output/files/<YYYY-MM of mtime>/`.
+12. **todo mapping gaps.** Run
+    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/todo_parse.py --projects` and
+    list `unmapped` headings, plus `_projects.yml` `v:` pages that do not
+    exist yet (informational — distill creates them when digests arrive).
+13. **Pending review.** Count of `_staging/review/*.md` (judgment calls
+    queued by unattended distill), oldest date.
 
 ## Output format
 
@@ -63,6 +72,9 @@ resolving contradictions — that's this skill's job.
 ## Duplicate titles (<N>)
 ## Diary gaps (<N>)
 ## Non-compliant tags (<N>)
+## Stray deliverables (<N>)
+## todo mapping gaps (<N>)
+## Pending review (<N>)
 
 ## Git
 - <clean | N uncommitted files>
