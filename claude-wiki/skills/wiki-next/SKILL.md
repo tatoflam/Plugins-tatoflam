@@ -21,8 +21,8 @@ repo, never commit. The output is read on a phone — keep it to ~20 lines.
    (today's week). If no week file covers today, use the latest one and
    say so.
 2. **Record.** For this week's date range, read the `todo:` frontmatter
-   of digests in `_staging/` and `_staging/archive/` (files named
-   `<date>-*.md` within the range). Build per item: last touched date,
+   of digests in `_staging/` and `_staging/archive/` whose filename date
+   or `captured:` JST date is within the range. Build per item: last touched date,
    progress (`advanced` / `done-candidate` / `touched`), session ids.
    Also skim the last 3 days of `02_diary/` (持ち越し sections especially).
 3. **Calendar.** If a Google Calendar tool is available, list today's and

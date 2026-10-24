@@ -87,7 +87,9 @@ push_todo() {
   git -C "${TODO}" push -q || { echo "todo push failed"; return 1; }
 }
 
-# 1. pull both
+# 1. pull the plugin itself (this host may lag behind the dev Mac), then both repos
+PLUGIN_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+git -C "${PLUGIN_REPO}" pull --ff-only -q || echo "plugin pull failed (continuing with local copy)"
 git -C "${VAULT}" pull --rebase --autostash -q || { git -C "${VAULT}" rebase --abort 2>/dev/null; fail "vault-pull"; }
 git -C "${TODO}" pull --rebase --autostash -q || { git -C "${TODO}" rebase --abort 2>/dev/null; fail "todo-pull"; }
 

@@ -138,11 +138,15 @@ g. **Mark source processed.**
      question callout.
 
 ### 2b. Regenerate the diary for every touched date
-For each JST date that received a new digest this run (and is
+For each JST date that received a new digest this run (its filename
+date and its `captured` date) (and is
 2026-10-24 or later), rebuild `02_diary/<date>.md` from scratch using
-**all** digests of that date — `_staging/<date>-*.md` and
-`_staging/archive/<date>-*.md` — plus that date's lines in
-`06_output/catalog/`. Format: schema.md §"`02_diary/` rules"
+**all** digests of that date — in `_staging/` and `_staging/archive/`,
+a digest belongs to date D when its filename date is D **or** its
+`captured:` timestamp falls on D in JST (filenames carry the session's
+*start* date, so a session running 10-22 → 10-24 is only found via
+`captured`; use the part of its body that happened on D) — plus that
+date's lines in `06_output/catalog/`. Format: schema.md §"`02_diary/` rules"
 (今日のまとめ / 予定に対して / 予定外 / 出したもの / 持ち越し + folded
 session index). 予定に対して comes from digests' `todo.items` (group by
 todo heading); 予定外 from `todo.unplanned: true`. Body ≈ 30 lines; no

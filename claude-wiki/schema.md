@@ -208,7 +208,9 @@ recognized as primary).
 
 One file per day: `02_diary/YYYY-MM-DD.md`. **Machine-owned**: every
 ingest regenerates the day's file from *all* digests of that day
-(`_staging/<date>-*.md` + `_staging/archive/<date>-*.md`), so repeated
+(in `_staging/` + `_staging/archive/`; a digest belongs to day D when its
+filename date — the session start — or its `captured:` JST date is D),
+so repeated
 ingests never stack duplicate sections. Users write notes in `01_inbox/`
 or the todo repo, not here. Days created before 2026-10-24 keep their
 old per-session format and are never rewritten.

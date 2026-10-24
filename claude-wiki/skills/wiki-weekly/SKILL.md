@@ -40,8 +40,9 @@ digests + diaries only and note it in both outputs.
 
 ### 3. Build the per-item record
 - `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/todo_parse.py --date <today> --projects`
-- Read `todo:` frontmatter of every digest dated in the review week
-  (`_staging/<date>-*.md`, `_staging/archive/<date>-*.md`).
+- Read `todo:` frontmatter of every digest of the review week (in
+  `_staging/` and `_staging/archive/`; filename date or `captured:` JST
+  date within the week).
 - Per item: sessions + dates, best progress (`done-candidate` >
   `advanced` > `touched`), confidence.
 - 予定外: digests with `todo.unplanned: true`, grouped by `target`/project.
