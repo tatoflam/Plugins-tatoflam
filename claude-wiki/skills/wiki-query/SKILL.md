@@ -16,6 +16,11 @@ unorganized; never blur the two.
 
 - **Knowledge layer** (primary): `00_self/`, `03_work/`, `04_life/`,
   `05_learn/`, `06_output/`, `07_archive/`, `home.md`
+  — 03_work / 04_life are project folders `NNN_<slug>/`: read the main
+  page `<slug>.md` first, then the sub-pages in the same folder (trackers,
+  research notes) when the main page points to them or the question is
+  about details. A name the user gives maps to a folder with
+  `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/vault_paths.py resolve <category>/<slug>`.
 - **Capture layer** (fallback, label it): `_staging/*.md` (undistilled),
   `02_diary/`, `01_inbox/` (drafts)
 - **Queue status** (freshness caveat): `~/.claude/wiki/state/queue.jsonl`

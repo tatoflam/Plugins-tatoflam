@@ -16,7 +16,7 @@ Catalog line (one per deliverable, key = path or URL):
 Usage:
   extract_artifacts.py --transcript F [--offset N]            # JSON to stdout
   extract_artifacts.py --transcript F --catalog-dir D --write # merge into catalog
-  extract_artifacts.py --vault-files --write                    # register 06_output/files/*
+  extract_artifacts.py --vault-files --write                    # register 06_output/files/* and <project>/files/*
   extract_artifacts.py --scan ~/.claude/projects --since 2026-08-18 \
       --capture-conf ~/.claude/wiki/config/capture.conf --catalog-dir D --write
 """
@@ -42,6 +42,13 @@ PUBLISHED_RE = re.compile(r"Published (\S+) at (https://claude\.ai/\S+?)(?=[\s\"
 PR_RE = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+")
 DEPLOY_RE = re.compile(r"https://[\w.-]+\.(?:pages\.dev|web\.app|firebaseapp\.com)(?:/[\w./-]*)?")
 JST = dt.timezone(dt.timedelta(hours=9))
+
+
+def vault_file_globs():
+    """Where deliverables made inside the vault live: project folders' files/
+    (03_work|04_life/NNN_slug/files/**) and 06_output/files/YYYY-MM/ for the rest."""
+    return [os.path.join(VAULT, "06_output/files/*/*"),
+            os.path.join(VAULT, "0[34]_*/[0-9][0-9][0-9]_*/files/**/*")]
 
 
 def jst_date(ts):
@@ -156,7 +163,8 @@ def extract(transcript, offset=0):
             it["repo"] = ""
         else:
             if it["kind"] != "artifact" and local and not os.path.exists(local):
-                moved = glob.glob(os.path.join(VAULT, "06_output/files/*", os.path.basename(local)))
+                moved = [m for g in vault_file_globs() for m in glob.glob(g, recursive=True)
+                         if os.path.basename(m) == os.path.basename(local)]
                 if moved:
                     it["key"] = it["local"] = local = moved[0]
                 else:
@@ -274,7 +282,7 @@ def main():
     ap.add_argument("--capture-conf", default=os.path.join(HOME, ".claude/wiki/config/capture.conf"))
     ap.add_argument("--catalog-dir", default=os.path.join(VAULT, "06_output/catalog"))
     ap.add_argument("--vault-files", action="store_true",
-                    help="also register files under <vault>/06_output/files/ that no transcript produced")
+                    help="also register files under <vault>/06_output/files/ and project folders' files/ that no transcript produced")
     ap.add_argument("--write", action="store_true")
     a = ap.parse_args()
 
@@ -294,7 +302,7 @@ def main():
         ap.error("--transcript, --scan or --vault-files is required")
     if a.vault_files:
         seen = {i["key"] for i in items}
-        for p in sorted(glob.glob(os.path.join(VAULT, "06_output/files/*/*"))):
+        for p in sorted({m for g in vault_file_globs() for m in glob.glob(g, recursive=True)}):
             if p in seen or os.path.splitext(p)[1].lower() not in DOC_EXT:
                 continue
             d = dt.datetime.fromtimestamp(os.path.getmtime(p), JST).date().isoformat()

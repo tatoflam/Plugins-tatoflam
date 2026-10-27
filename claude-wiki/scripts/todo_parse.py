@@ -20,7 +20,9 @@ Usage:
   todo_parse.py --todo-dir DIR --list-weeks
 
 --projects attaches mapped vault pages/tags from DIR/_projects.yml and lists
-headings that have no mapping (`unmapped`).
+headings that have no mapping (`unmapped`). Vault paths are resolved through
+vault_paths.resolve(), so old <category>/<slug> refs map to project folders;
+refs with no page yet are kept and also listed in `vault_missing`.
 """
 import argparse
 import datetime as dt
@@ -29,6 +31,9 @@ import json
 import os
 import re
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import vault_paths  # noqa: E402
 
 WEEK_RE = re.compile(r"^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})\.md$")
 BULLET_RE = re.compile(r"^(\s*)[-*+]\s+(.*\S)?\s*$")
@@ -255,7 +260,11 @@ def main():
         entries = parse_projects(os.path.join(a.todo_dir, "_projects.yml"))
         for it in items:
             hits = match_projects(it["path"], entries)
-            it["vault"] = sorted({v for e in hits for v in e.get("v", [])})
+            refs = sorted({v for e in hits for v in e.get("v", [])})
+            # _projects.yml may still say <category>/<slug>; map to the project
+            # folder's page. Unresolved refs are kept as written (page not created yet).
+            it["vault"] = sorted({vault_paths.resolve(r) or r for r in refs})
+            it["vault_missing"] = [r for r in refs if not vault_paths.resolve(r)]
             it["tags"] = sorted({t for e in hits for t in e.get("tags", [])})
         # a heading (depth 0/1) is unmapped when neither it nor anything under it maps
         unmapped = []

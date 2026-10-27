@@ -19,7 +19,9 @@ repo, never commit. The output is read on a phone — keep it to ~20 lines.
 
 1. **Plan.** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/todo_parse.py --projects`
    (today's week). If no week file covers today, use the latest one and
-   say so.
+   say so. Each item's `vault` list is already resolved to the project
+   folder's page (old `_projects.yml` paths still work); cite pages by
+   that path.
 2. **Record.** For this week's date range, read the `todo:` frontmatter
    of digests in `_staging/` and `_staging/archive/` whose filename date
    or `captured:` JST date is within the range. Build per item: last touched date,

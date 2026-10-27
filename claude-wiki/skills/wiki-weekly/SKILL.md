@@ -45,7 +45,13 @@ digests + diaries only and note it in both outputs.
   date within the week).
 - Per item: sessions + dates, best progress (`done-candidate` >
   `advanced` > `touched`), confidence.
-- 予定外: digests with `todo.unplanned: true`, grouped by `target`/project.
+- 予定外: digests with `todo.unplanned: true`, grouped by `target`/project
+  (resolve `target:` with `scripts/vault_paths.py resolve`, so old flat
+  targets group with their project folder).
+- Links you write use the project folder path
+  (`[[03_work/012_meguru-crm/meguru-crm]]`). In the 対応表の追加候補
+  section, propose `v:` entries as `<category>/<slug>` — that form stays
+  valid across renumbering and is resolved by the scripts.
 - 出したもの: review-week lines of `06_output/catalog/`.
 - 確認待ち: files in `_staging/review/`.
 

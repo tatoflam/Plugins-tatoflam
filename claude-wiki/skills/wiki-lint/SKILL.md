@@ -31,7 +31,10 @@ resolving contradictions — that's this skill's job.
    `git mv` to `07_archive/`.
 5. **Missing frontmatter.** Non-diary pages lacking `title`, `category`,
    `updated`, or `sources`.
-6. **Broken wiki-links.** `[[target]]` where no matching file exists.
+6. **Broken wiki-links.** `[[target]]` where no matching file exists —
+   check with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/vault_paths.py resolve <target>`,
+   so an old flat link to a project that now has a folder is not broken
+   (count those separately as "old-form links").
 7. **Duplicate titles.** Two pages with identical `title:` frontmatter —
    candidate merges.
 8. **Diary gaps.** Days with sessions in `ingest-log.jsonl` but no
@@ -48,13 +51,24 @@ resolving contradictions — that's this skill's job.
     ≤ 10.
 11. **Stray deliverables.** Non-markdown files at the vault root that
     are not dot-files (e.g. `*.html`, `*.pdf`). Never move them; list each
-    with the suggested destination `06_output/files/<YYYY-MM of mtime>/`.
+    with the suggested destination: the matching project folder's `files/`
+    if one is obvious, otherwise `06_output/files/<YYYY-MM of mtime>/`.
 12. **todo mapping gaps.** Run
     `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/todo_parse.py --projects` and
     list `unmapped` headings, plus `_projects.yml` `v:` pages that do not
     exist yet (informational — distill creates them when digests arrive).
 13. **Pending review.** Count of `_staging/review/*.md` (judgment calls
     queued by unattended distill), oldest date.
+14. **Project folder layout** (schema.md §"Project folders"), in
+    03_work and 04_life:
+    - *flat pages*: `.md` files directly under the category (should be
+      inside a `NNN_<slug>/` folder);
+    - *missing main page*: a `NNN_<slug>/` folder without `<slug>.md`;
+    - *duplicate numbers*: two folders with the same `NNN` in a category;
+    - *unlinked sub-pages*: a page in a project folder other than the main
+      page that has no `[[…]]` link to the main page, or is not listed in
+      the main page's `## Links`.
+    Never fix these automatically; list each with the suggested fix.
 
 ## Output format
 

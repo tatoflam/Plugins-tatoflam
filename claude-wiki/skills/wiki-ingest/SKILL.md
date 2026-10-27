@@ -73,6 +73,11 @@ c. **Classify (as a proposal).** Score the content against
    00/03/04/05/06/07 and pick the integration target page (grep the
    vault for an existing page on the same subject — prefer update >
    create, but you are only *proposing*; distill re-judges).
+   03_work / 04_life are project folders (schema.md §"Project folders"):
+   write `target:` as the existing page's real path
+   (`03_work/012_meguru-crm/meguru-crm`, or a sub-page in that folder),
+   found with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/vault_paths.py resolve <category>/<slug>`;
+   for a new project write `<category>/<slug>` — distill assigns the number.
 
    Category hints:
    - **00_self**: self-reflection statements about identity, values, skills.
@@ -123,8 +128,9 @@ f. **Extract deliverables** (sessions only), *before* moving the cursor:
    ```
    It merges into `<vault>/06_output/catalog/YYYY-MM.md` (dedup by
    path/URL). If a session wrote a deliverable at the vault root, move it
-   to `06_output/files/YYYY-MM/` with `git mv` (or `mv` if untracked)
-   and run `extract_artifacts.py --vault-files --write`.
+   with `git mv` (or `mv` if untracked) to the project folder's `files/`
+   when it belongs to an existing project, otherwise to
+   `06_output/files/YYYY-MM/`, and run `extract_artifacts.py --vault-files --write`.
 
 g. **Mark source processed.**
    - Sessions: set `cursors[path]` to current byte length; flip
@@ -150,8 +156,10 @@ date's lines in `06_output/catalog/`. Format: schema.md §"`02_diary/` rules"
 (今日のまとめ / 予定に対して / 予定外 / 出したもの / 持ち越し + folded
 session index). 予定に対して comes from digests' `todo.items` (group by
 todo heading); 予定外 from `todo.unplanned: true`. Body ≈ 30 lines; no
-command arguments, test counts or telemetry. Overwrite the file (it is
-machine-owned). Wiki meta-sessions contribute nothing. Dates before
+command arguments, test counts or telemetry. Links to projects use the
+folder path (`[[03_work/012_meguru-crm/meguru-crm]]`); resolve each
+digest's `target:` / `todo` vault refs with `vault_paths.py resolve`
+before writing them. Overwrite the file (it is machine-owned). Wiki meta-sessions contribute nothing. Dates before
 2026-10-24 are never rewritten.
 
 ### 3. Audit trail (machine)
@@ -183,7 +191,9 @@ a. **Regenerate `<vault>/index.md`** from the filesystem. Overwrite
    - [[07_archive/<name>]]
    ```
    Alphabetical within each section except `02_diary` which is reverse
-   chronological. Exclude dotfiles, `_staging/`, and the root welcome
+   chronological. 03_work / 04_life list every page inside the project
+   folders (`- [[03_work/012_meguru-crm/meguru-crm]]`, sub-pages after
+   their main page), in folder-number order; never list `files/`. Exclude dotfiles, `_staging/`, and the root welcome
    notes (`ようこそ.md`, `make folders composition.md`). Include
    `01_inbox` as a count line only: `_<N> pending items_`.
 
@@ -214,7 +224,7 @@ days for audit, then drop.
 ### 6. Commit in vault
 ```
 cd ~/repo/github/tatoflam/v
-git add _staging 02_diary 06_output/catalog 06_output/files index.md log.md _schema.md 01_inbox
+git add _staging 02_diary 06_output/catalog 06_output/files 03_work/*/files 04_life/*/files index.md log.md _schema.md 01_inbox
 git diff --cached --quiet || git commit -m "capture: <S> sessions + <I> inbox → <D> digests (backlog <B>)"
 ```
 Scope `git add` to capture-layer paths — never `git add -A` (it would
@@ -239,7 +249,7 @@ Otherwise end with a single actionable next step.
 
 - **Never write to curated pages** (00/03/04/05/07, `06_output/YYYY-MM.md`
   or `home.md`). Capture goes to `_staging/`, `02_diary/<date>.md`,
-  `06_output/catalog/` and `06_output/files/` only. There is no
+  `06_output/catalog/`, `06_output/files/` and project folders' `files/` only. There is no
   dirty-target defer anymore — capture files are machine-owned.
 - **Never write to the todo repo.** It is read-only for ingest.
 - **Never write to `_staging/archive/`** — that's distill's output.

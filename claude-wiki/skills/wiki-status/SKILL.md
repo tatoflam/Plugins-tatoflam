@@ -25,8 +25,9 @@ One-shot status readout. No edits.
    or `git -C <vault> log -1 --format=%cI` as fallback.
 5. **Last distill** — latest `op:distill` line in `<vault>/log.md`, or
    "never".
-6. **Pages per category** — `find <vault>/0X_* -name '*.md' | wc -l` per
-   folder, 00-07.
+6. **Pages per category** — `find <vault>/0X_* -name '*.md' -not -path '*/files/*' | wc -l`
+   per folder, 00-07; for 03_work and 04_life also the number of project
+   folders (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/vault_paths.py projects`).
 7. **Git state** — `git -C <vault> status --porcelain | wc -l` (count of
    uncommitted changes). If not a git repo, say so.
 8. **Hook errors** — tail of `~/.claude/wiki/state/hook-errors.log` if
