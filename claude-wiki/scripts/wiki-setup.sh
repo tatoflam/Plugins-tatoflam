@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Idempotent per-host setup for claude-wiki.
 #
-#   wiki-setup.sh [--hook] [--weekly] [--vault-visibility PRIVATE]
+#   wiki-setup.sh [--hook] [--weekly] [--morning] [--vault-visibility PRIVATE]
 #
 #   (always)   ~/.claude/wiki/{state,config,hooks}, merge.regen driver in the vault
 #   --hook     symlink ~/.claude/wiki/hooks/auto-ingest-push.sh → this plugin's copy,
 #              register it as a SessionEnd hook and enable the plugin in
 #              ~/.claude/settings.json (backup written next to it)
 #   --weekly   install launchd job com.tatoflam.wiki-weekly (Sunday 08:00 local time)
+#   --morning  install launchd job com.tatoflam.todo-morning (daily 08:00): today's
+#              todo digest via notify-cli (profile "todo" in ~/.config/notify-cli/config.yaml)
 #   --vault-visibility V
 #              record the vault's GitHub visibility for hosts without gh
 #              (verify it with `gh repo view` on a host that has gh first)
@@ -23,12 +25,14 @@ WIKI="${HOME}/.claude/wiki"
 VAULT="${WIKI_VAULT:-${HOME}/repo/github/tatoflam/v}"
 SETTINGS="${HOME}/.claude/settings.json"
 PLIST="${HOME}/Library/LaunchAgents/com.tatoflam.wiki-weekly.plist"
+MORNING_PLIST="${HOME}/Library/LaunchAgents/com.tatoflam.todo-morning.plist"
 
-HOOK=0; WEEKLY=0; VIS=""
+HOOK=0; WEEKLY=0; MORNING=0; VIS=""
 while (( $# )); do
   case "$1" in
     --hook) HOOK=1 ;;
     --weekly) WEEKLY=1 ;;
+    --morning) MORNING=1 ;;
     --vault-visibility) VIS="$2"; shift ;;
     *) echo "unknown arg: $1"; exit 2 ;;
   esac
@@ -104,4 +108,33 @@ EOF
     sleep 3   # "Bootstrap failed: 5" while the old job is still being torn down
   done
   launchctl print "gui/$(id -u)/com.tatoflam.wiki-weekly" >/dev/null && echo "ok   launchd com.tatoflam.wiki-weekly (Sun 08:00 $(date +%Z))"
+fi
+
+if (( MORNING )); then
+  mkdir -p "$(dirname "${MORNING_PLIST}")"
+  cat > "${MORNING_PLIST}" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.tatoflam.todo-morning</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>${HERE}/todo-morning.sh</string></array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+  <key>EnvironmentVariables</key>
+  <dict><key>HOME</key><string>${HOME}</string><key>LANG</key><string>ja_JP.UTF-8</string></dict>
+  <key>StandardOutPath</key><string>${WIKI}/state/morning.launchd.log</string>
+  <key>StandardErrorPath</key><string>${WIKI}/state/morning.launchd.log</string>
+</dict>
+</plist>
+EOF
+  launchctl bootout "gui/$(id -u)/com.tatoflam.todo-morning" 2>/dev/null || true
+  for i in 1 2 3 4 5; do
+    launchctl bootstrap "gui/$(id -u)" "${MORNING_PLIST}" 2>/dev/null && break
+    sleep 3
+  done
+  launchctl print "gui/$(id -u)/com.tatoflam.todo-morning" >/dev/null && echo "ok   launchd com.tatoflam.todo-morning (daily 08:00 $(date +%Z))"
+  grep -q '^  todo:' "${HOME}/.config/notify-cli/config.yaml" 2>/dev/null \
+    || echo "WARN notify-cli profile 'todo' missing in ~/.config/notify-cli/config.yaml"
 fi

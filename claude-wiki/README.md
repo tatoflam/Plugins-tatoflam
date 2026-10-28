@@ -44,7 +44,9 @@ SessionEnd hook ──▶ queue.jsonl ──▶ /wiki-ingest ──▶ _staging/
    today's 3-5 actions (read-only); **`/wiki-weekly`** (launchd, Sunday
    08:00) runs unattended distill, writes a plan-vs-actual review and
    drops next week's draft into the todo repo's `_proposals/` — it never
-   edits the user's week files.
+   edits the user's week files. **`todo-morning.sh`** (launchd, daily
+   08:00) sends today's digest — the day's section if any, dated/due
+   items, overdue, next 7 days, ⭐️ — through notify-cli (Slack + macOS).
 
 The vault itself is a separate, publishable git repo — Obsidian opens it
 directly; push it to GitHub when you want.
@@ -106,6 +108,7 @@ hook, weekly launchd job, git merge driver):
 ```bash
 claude-wiki/scripts/wiki-setup.sh --hook            # every host that captures sessions
 claude-wiki/scripts/wiki-setup.sh --hook --weekly   # the always-on host
+claude-wiki/scripts/wiki-setup.sh --morning         # one host: 08:00 todo digest (notify-cli profile "todo")
 ```
 
 Host-local config (never committed): `~/.claude/wiki/config/capture.conf`
