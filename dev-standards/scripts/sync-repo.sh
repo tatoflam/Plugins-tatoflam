@@ -53,7 +53,7 @@ settings="$repo/.claude/settings.json"
 [[ -f "$settings" ]] || echo '{}' >"$settings"
 tmp="$(mktemp)"
 jq --indent 2 '
-  def ours: (.hooks // []) | any(.command | test("/\\.claude/hooks/(check-edit\\.py|ensure-tools\\.sh)$"));
+  def ours: (.hooks // []) | any((.command // "") | test("/\\.claude/hooks/(check-edit\\.py|ensure-tools\\.sh)$"));
   def put(event; entry): .hooks[event] = ([(.hooks[event] // [])[] | select(ours | not)] + [entry]);
   put("SessionStart"; {
     matcher: "startup|resume",
