@@ -1,0 +1,9 @@
+{
+  "name": "dev-standards",
+  "version": "0.1.0",
+  "description": "Coding standards enforced by tools: a PostToolUse hook runs ruff (bandit rules), shellcheck and gitleaks on each edited file and feeds back only the findings that edit introduced. A short skill names the references (OWASP ASVS, CWE Top 25, PEP 8, Google Shell Style). sync-repo.sh copies the same hook into a repo so Claude Code on the web enforces it too.",
+  "author": { "name": "tatoflam" },
+  "repository": "https://github.com/tatoflam/Plugins-tatoflam",
+  "license": "MIT",
+  "keywords": ["coding-standards", "security", "lint", "ruff", "bandit", "shellcheck", "gitleaks", "hooks"]
+}

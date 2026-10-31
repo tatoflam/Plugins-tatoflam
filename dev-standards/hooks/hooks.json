@@ -1,0 +1,31 @@
+{
+  "description": "dev-standards: lint each edited file (ruff+bandit rules, shellcheck, gitleaks) and report what the edit added",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/ensure-tools.sh",
+            "args": ["--plugin"],
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/check-edit.py",
+            "args": ["--plugin"],
+            "timeout": 90
+          }
+        ]
+      }
+    ]
+  }
+}

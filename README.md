@@ -6,6 +6,7 @@ Personal Claude Code plugin marketplace by [@tatoflam](https://github.com/tatofl
 
 | Name | Description |
 |---|---|
+| [dev-standards](./dev-standards) | Coding standards by tools: a PostToolUse hook runs ruff (bandit rules), shellcheck and gitleaks on each edit and reports only what the edit added. `sync-repo.sh` copies it into repos for Claude Code on the web. |
 | [claude-wiki](./claude-wiki) | Karpathy-style LLM wiki. SessionEnd hook + `/wiki-ingest` skill turn conversations across every project into an 8-category Obsidian vault. |
 
 ## Install

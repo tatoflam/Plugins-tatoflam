@@ -1,0 +1,12 @@
+# Default ruff rules for the dev-standards hook, used only when the repo has no ruff config.
+# Correctness and security, not style: the hook blocks on these, so each must be worth a stop.
+[lint]
+select = [
+  "E9",  # syntax / IO errors
+  "F",   # pyflakes: undefined names, unused imports, ...
+  "B",   # flake8-bugbear: likely bugs
+  "S",   # flake8-bandit: security (OWASP / CWE mapped)
+]
+ignore = [
+  "S101",  # assert — fine outside optimized builds; tests rely on it
+]
